@@ -1,0 +1,56 @@
+name: Homebrew
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, macos-15, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_ANALYTICS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test formula and completions
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            if [[ ! -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+              NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          if [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            formula=entendrefinance/tap/entendre
+          else
+            brew tap-new --no-git entendre/check
+            cp Formula/entendre.rb "$(brew --repository entendre/check)/Formula/entendre.rb"
+            formula=entendre/check/entendre
+          fi
+          brew install "$formula"
+          if [[ "$formula" == entendrefinance/tap/entendre ]]; then
+            cmp Formula/entendre.rb "$(brew --repository entendrefinance/tap)/Formula/entendre.rb"
+          fi
+          brew audit --formula "$formula"
+          brew test "$formula"
+          prefix="$(brew --prefix entendre)"
+          for completion in etc/bash_completion.d/entendre share/zsh/site-functions/_entendre share/fish/vendor_completions.d/entendre.fish; do
+            test -s "$prefix/$completion"
+          done
+          if [[ "$RUNNER_OS" == macOS ]]; then codesign --verify --strict "$prefix/bin/entendre"; fi
+          entendre tags list --help > /dev/null
+          brew uninstall entendre

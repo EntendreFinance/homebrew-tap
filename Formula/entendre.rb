@@ -28,7 +28,7 @@ class Entendre < Formula
   def install
     bin.install Dir["*"].first => "entendre"
     chmod 0755, bin/"entendre"
-    generate_completions_from_executable(bin/"entendre", "completion", shells: [:bash, :zsh, :fish])
+    generate_completions_from_executable(bin/"entendre", "completion")
   end
 
   def caveats
